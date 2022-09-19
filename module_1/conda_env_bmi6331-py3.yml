@@ -1,0 +1,23 @@
+name: bmi6331
+channels:
+- defaults
+- conda-forge
+dependencies:
+- python=3.7
+- ipython
+- jupyter
+- jupyterlab
+- matplotlib
+- numpy
+- pandas
+- qtconsole
+- scikit-image=0.18.1
+- scipy=1.6.2
+- seaborn
+- scikit-learn=0.24.2
+- tensorflow=2
+- tensorboard=2
+- simpleitk=2
+- nilearn=0.8.0
+- fsleyes
+- ipywidgets

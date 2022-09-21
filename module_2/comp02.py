@@ -52,19 +52,19 @@ class Histogram:
         fig.set_figheight(10)
         fig.set_figwidth(15)
 
-        fig.suptitle(f"Contrast stretching of image: {os.path.basename(filepath_img)}")
-
-        im = skio.imread(filepath_img)
-        im = skcol.rgb2gray(im)
+        im = skcol.rgb2gray(skio.imread(filepath_img))
         threshold_otsu = skfl.threshold_otsu(im)
+
+        fig.suptitle(f"Contrast stretching of image: {os.path.basename(filepath_img)} | Otsu threshold: {str(round(threshold_otsu, 2))}")
 
         list_img = [im, self.contrast_stretch(im, lowest_pixel=threshold_otsu)]
         list_title = ["Original", "After contrast stretching"]
 
         for i in [0, 1]:
-            axes[i, 0].imshow(list_img[i], cmap="gray")
+            ax = axes[i, 0].imshow(list_img[i], cmap="gray", vmin=0, vmax=1)
+            plt.colorbar(ax, ax=axes[i, 0])
             axes[i, 0].set_title(list_title[i] + ": Image")
             axes[i, 1].hist(list_img[i].flatten(), bins=20, range=(0, 1))
             axes[i, 1].set_title(list_title[i] + ": Histogram")
 
-        return fig
+        return fig, threshold_otsu

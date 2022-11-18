@@ -1,0 +1,5 @@
+Task 1:
+Approach (by Chinmay)
+
+1. Divide image into regions
+2. Pick the right region, remove everything else

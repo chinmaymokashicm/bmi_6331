@@ -1,0 +1,11 @@
+94258-2022-11-15 11:05:38-INFO-Started the script
+94258-2022-11-15 11:05:48-INFO-<tensorflow.python.keras.engine.training.Model object at 0x7f7eb247f2e8>
+94258-2022-11-15 11:07:06-INFO-Completed pre-processing of images.
+94258-2022-11-15 11:07:55-INFO-Generated final form of training dataset for machine learning.
+94258-2022-11-15 11:08:02-INFO-Generated final form of dataset for machine learning.
+94258-2022-11-15 11:08:02-INFO-Trained model.
+94258-2022-11-15 11:08:02-INFO-Plotted ROC curve.
+94258-2022-11-15 11:08:02-INFO-Calculated threshold: 0.06360692623715163
+94258-2022-11-15 11:08:03-INFO-Plotted confusion matrix.
+94258-2022-11-15 11:08:03-INFO-Saved model.
+94258-2022-11-15 11:08:03-INFO-Saved numpy arrays.

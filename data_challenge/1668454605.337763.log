@@ -1,0 +1,9 @@
+57825-2022-11-14 13:36:45-INFO-Started the script
+57825-2022-11-14 13:36:52-INFO-<tensorflow.python.keras.engine.training.Model object at 0x7ff2ba0c2c88>
+57825-2022-11-14 22:39:22-INFO-Generated final form of training dataset for machine learning.
+57825-2022-11-14 22:41:13-INFO-Generated final form of dataset for machine learning.
+57825-2022-11-14 22:42:25-INFO-Trained model.
+57825-2022-11-14 22:42:26-INFO-Plotted ROC curve.
+57825-2022-11-14 22:42:26-INFO-Plotted confusion matrix.
+57825-2022-11-14 22:42:26-INFO-Saved model.
+57825-2022-11-14 22:42:26-INFO-Saved numpy arrays.

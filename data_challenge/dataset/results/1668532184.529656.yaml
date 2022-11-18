@@ -1,0 +1,6 @@
+model:
+  C: 0.5
+  penalty: l1
+  solver: liblinear
+  type: LogisticRegression
+transfer_learning: VGG16

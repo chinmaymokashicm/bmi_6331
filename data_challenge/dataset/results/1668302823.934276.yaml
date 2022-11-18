@@ -1,0 +1,6 @@
+model:
+  type: "LogisticRegression"
+  penalty: "l1"
+  C: 0.5
+  solver: "liblinear"
+transfer_learning: "InceptionV3"

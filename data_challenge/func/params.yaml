@@ -1,0 +1,21 @@
+task1:
+  crop:
+    n_rows: 8
+    n_cols: 8
+    range_rows: [1, 7]
+    range_cols: [4, 7]
+  transfer_learning:
+    ResNet50:
+      new_img_dims: [224, 224]
+      to_rgb: True
+    InceptionV3:
+      new_img_dims: [299, 299]
+      to_rgb: True
+    VGG16:
+      new_img_dims: [150, 150]
+      to_rgb: True
+  classification:
+    - LogisticRegression:
+      penalty: "l1"
+      C: 0.5
+      solver: "liblinear"

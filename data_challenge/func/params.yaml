@@ -4,6 +4,11 @@ task1:
     n_cols: 8
     range_rows: [1, 7]
     range_cols: [4, 7]
+  crop_new:
+    n_rows: 9
+    n_cols: 9
+    range_rows: [2, 8]
+    range_cols: [1, 9]
   transfer_learning:
     ResNet50:
       new_img_dims: [224, 224]
@@ -15,7 +20,11 @@ task1:
       new_img_dims: [150, 150]
       to_rgb: True
   classification:
-    - LogisticRegression:
+    LogisticRegression:
       penalty: "l1"
       C: 0.5
       solver: "liblinear"
+    SVM:
+      C: 0.5
+      kernel: "rbf"
+      probability: True

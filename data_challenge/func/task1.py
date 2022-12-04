@@ -2,8 +2,13 @@
 Class for code related to Task 1
 """
 import copy, os, yaml
+from tabulate import tabulate
+from tqdm import tqdm as tqdm_regular
+from tqdm.notebook import tqdm as tqdm_notebook
 import matplotlib.pyplot as plt
+from cycler import cycler
 import numpy as np
+import pandas as pd
 import skimage.io as skio
 import skimage.draw as skdr
 import skimage.util as skut
@@ -15,10 +20,18 @@ import sklearn.preprocessing as le_pr
 import sklearn.linear_model as le_lm
 import sklearn.metrics as le_me
 
+import tensorflow.keras.applications.inception_v3 as ki3
+import tensorflow.keras.applications.resnet50 as k50
+import tensorflow.keras.applications.vgg16 as vgg16
+
+import pickle
+
 class Task1:
     def __init__(self):
         self.folderpath_root = "/Users/cmokashi/Documents/UTHealth/bmi_6331/data_challenge/"
         self.folderpath_results = os.path.join(self.folderpath_root, "dataset", "results")
+        with open("func/params.yaml", "r") as f:
+            self.dict_params = yaml.full_load(f)["task1"]
 
     def get_pipelines(self):
         """Returns pipeline UIDs.
@@ -37,12 +50,93 @@ class Task1:
         list_uids_complete = list(set(list_uids_complete))
         
         return list_uids, list_uids_complete
+    
+    def preprocess_images(self, crop="v1", transfer_learning_model="InceptionV3", tqdm_type="notebook"):
+        df_info = pd.read_csv(os.path.join(self.folderpath_root, "dataset/dataInfo.csv"), index_col=False)
+        df_info["filepath"] = df_info["FullFileName"].apply(lambda path: os.path.join("dataset", path))
+        list_img_train = []
+        list_y_train = []
+        list_img_test = []
+        list_y_test = []
+
+        tqdm_module = tqdm_regular if tqdm_type == "regular" else tqdm_notebook
+
+        for filepath_img, train, cardiomegaly in tqdm_module(df_info[["filepath", "Train", "Cardiomegaly"]].values.tolist()):
+            if crop == "v1":
+                img = self.crop_img_by_region(filepath_img=filepath_img, **(self.dict_params["crop"]))
+            elif crop == "v2":
+                img = self.crop_img_by_region(filepath_img=filepath_img, **(self.dict_params["crop_new"]))
+            else:
+                img = skio.imread(filepath_img)
+            img = self.contrast_stretch(img=img)
+            img = self.transform_img_to_size(img=img, **(self.dict_params["transfer_learning"][transfer_learning_model]))
+            img *= 255
+            img = img.astype(np.uint8)
+            if train == 1:
+                list_img_train.append(img)
+                list_y_train.append(cardiomegaly)
+            else:
+                list_img_test.append(img)
+                list_y_test.append(cardiomegaly)
+
+        if transfer_learning_model == "InceptionV3":
+            net = ki3
+            tl_mod = net.InceptionV3(include_top=False, pooling="avg")
+        elif transfer_learning_model == "ResNet50":
+            net = k50
+            tl_mod = net.ResNet50(include_top=False, pooling="avg")
+        elif transfer_learning_model == "VGG16":
+            net = vgg16
+            tl_mod = net.VGG16(include_top=False, pooling="avg")
+
+        trainX = tl_mod.predict(net.preprocess_input(np.array(list_img_train)))
+        trainY =np.array(list_y_train)
+        testX = tl_mod.predict(net.preprocess_input(np.array(list_img_test)))
+        testY = np.array(list_y_test)
+
+        return trainX, trainY, testX, testY
+
+    def return_group_info(self, tqdm_type="notebook"):
+        df_info = pd.read_csv(os.path.join(self.folderpath_root, "dataset/dataInfo.csv"), index_col=False)
+        df_info["filepath"] = df_info["FullFileName"].apply(lambda path: os.path.join("dataset", path))
+        list_X_train = []
+        list_y_train = []
+        list_X_test = []
+        list_y_test = []
+
+        tqdm_module = tqdm_regular if tqdm_type == "regular" else tqdm_notebook
+
+        for train, cardiomegaly, age, gender, view_pos in tqdm_module(df_info[["Train", "Cardiomegaly", "PatAge", "PatGender", "ViewPos"]].values.tolist()):
+            x = [age, gender, view_pos]
+            y = cardiomegaly
+            if train == 1:
+                list_X_train.append(x)
+                list_y_train.append(y)
+            else:
+                list_X_test.append(x)
+                list_y_test.append(y)
+        list_X_train = np.array(list_X_train)
+        list_y_train = np.array(list_y_train)
+        list_X_test = np.array(list_X_test)
+        list_y_test = np.array(list_y_test)
+        return list_X_train, list_y_train, list_X_test, list_y_test
+
 
     def load_plot_roc(self):
+        """Load data to plot ROC curves.
+        """
+        plt.rc("axes", prop_cycle=(cycler("color", ["r", "g", "b", "y"])))
         fig = plt.figure(figsize=(10, 10))
         fig.suptitle("ROC curves")
         list_uids, list_uids_complete = self.get_pipelines()
+        list_uids_auc = []
         for uid in list_uids_complete:
+            fpr = np.load(os.path.join(self.folderpath_results, f"{uid}_fpr.npy")), 
+            tpr = np.load(os.path.join(self.folderpath_results, f"{uid}_tpr.npy")), 
+            thresholds = np.load(os.path.join(self.folderpath_results, f"{uid}_thresholds.npy"))
+            auc = le_me.auc(fpr[0], tpr[0])
+            list_uids_auc.append((uid, auc))
+        for uid, _ in sorted(list_uids_auc, key=lambda l: l[1], reverse=True):
             fpr = np.load(os.path.join(self.folderpath_results, f"{uid}_fpr.npy")), 
             tpr = np.load(os.path.join(self.folderpath_results, f"{uid}_tpr.npy")), 
             thresholds = np.load(os.path.join(self.folderpath_results, f"{uid}_thresholds.npy"))
@@ -67,6 +161,108 @@ class Task1:
         plt.legend(loc="lower right")
         return fig
 
+    def generate_model_performance_summary(self, tqdm_type="notebook"):
+        df_info = pd.read_csv("dataset/dataInfo.csv", index_col=False)
+        df_info["filepath"] = df_info["FullFileName"].apply(lambda path: os.path.join("dataset", path))
+        trainXInceptionV3, trainYInceptionV3, testXInceptionV3, testYInceptionV3 = np.load(os.path.join(self.folderpath_root, "dataset", "_trainX_InceptionV3.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_trainY_InceptionV3.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testX_InceptionV3.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testY_InceptionV3.npy"))
+        trainXInceptionV3_v2, trainYInceptionV3_v2, testXInceptionV3_v2, testYInceptionV3_v2 = np.load(os.path.join(self.folderpath_root, "dataset", "_trainX_InceptionV3_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_trainY_InceptionV3_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testX_InceptionV3_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testY_InceptionV3_v2.npy"))
+        trainXResNet50, trainYResNet50, testXResNet50, testYResNet50 = np.load(os.path.join(self.folderpath_root, "dataset", "_trainX_ResNet50.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_trainY_ResNet50.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testX_ResNet50.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testY_ResNet50.npy"))
+        trainXResNet50_v2, trainYResNet50_v2, testXResNet50_v2, testYResNet50_v2 = np.load(os.path.join(self.folderpath_root, "dataset", "_trainX_ResNet50_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_trainY_ResNet50_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testX_ResNet50_v2.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testY_ResNet50_v2.npy"))
+        trainXVGG16, trainYVGG16, testXVGG16, testYVGG16 = np.load(os.path.join(self.folderpath_root, "dataset", "_trainX_VGG16.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_trainY_VGG16.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testX_VGG16.npy")), np.load(os.path.join(self.folderpath_root, "dataset", "_testY_VGG16.npy"))
+        list_uids, list_uids_complete = self.get_pipelines()
+        list_dict_rows = []
+        list_df_groups = [] # Generating model-wise group (gender, age) performance 
+
+        arr_X_train, arr_y_train, arr_X_test, arr_y_test = self.return_group_info(tqdm_type=tqdm_type)
+
+        tqdm_module = tqdm_regular if tqdm_type == "regular" else tqdm_notebook
+
+        for uid in tqdm_module(list_uids_complete):
+            with open(os.path.join(self.folderpath_results, f"{uid}.yaml"), "r") as f:
+                dict_info = yaml.full_load(f)
+            
+            model_type = dict_info["model"]["type"]
+            transfer_learning_type = dict_info["transfer_learning"]
+            version = None
+            if "version" in dict_info["model"]:
+                version = dict_info["model"]["version"]
+
+            with open(os.path.join(self.folderpath_results, f"{uid}.pkl"), "rb") as f_mod:
+                mod = pickle.load(f_mod)
+
+            if transfer_learning_type == "InceptionV3":
+                if version == "v2":
+                    X_train, y_train, X_test, y_test = trainXInceptionV3_v2, trainYInceptionV3_v2, testXInceptionV3_v2, testYInceptionV3_v2
+                else:
+                    X_train, y_train, X_test, y_test = trainXInceptionV3, trainYInceptionV3, testXInceptionV3, testYInceptionV3
+            elif transfer_learning_type == "ResNet50":
+                if version == "v2":
+                    X_train, y_train, X_test, y_test = trainXResNet50_v2, trainYResNet50_v2, testXResNet50_v2, testYResNet50_v2
+                else:
+                    X_train, y_train, X_test, y_test = trainXResNet50, trainYResNet50, testXResNet50, testYResNet50
+            elif transfer_learning_type == "VGG16":
+                X_train, y_train, X_test, y_test = trainXVGG16, trainYVGG16, testXVGG16, testYVGG16
+            else:
+                raise Exception(f"Could not find transfer learning type: {transfer_learning_type}")
+            
+            # Training Data
+            y_pred_train = mod.predict_proba(X_train)[:, 1]
+            fpr_train, tpr_train, thresholds_train = le_me.roc_curve(y_train, y_pred_train, pos_label=True)
+            threshold_train = self.calculate_threshold(fpr_train, tpr_train, thresholds_train)
+            y_pred_train_abs = y_pred_train > threshold_train
+
+            df_train = pd.DataFrame(list(zip(y_train, y_pred_train_abs, arr_X_train[:, 0], arr_X_train[:, 1], arr_X_train[:, 2])), columns=["true", "pred", "age", "gender", "view_pos"])
+            df_train["train"] = 1
+            df_train["model"] = f"{transfer_learning_type}_{model_type}" if version is None else f"{transfer_learning_type}_v{version}_{model_type}"
+
+            f1_train = le_me.f1_score(y_train, y_pred_train_abs)
+            auc_train = le_me.auc(fpr_train, tpr_train)
+
+            # Test Data
+            fpr_test = np.load(os.path.join(self.folderpath_results, f"{uid}_fpr.npy"))
+            tpr_test = np.load(os.path.join(self.folderpath_results, f"{uid}_tpr.npy"))
+            thresholds_test = np.load(os.path.join(self.folderpath_results, f"{uid}_thresholds.npy"))
+            threshold_test = self.calculate_threshold(fpr_test, tpr_test, thresholds_test)
+
+            y_pred_test = mod.predict_proba(X_test)[:, 1]
+            y_pred_test_abs = y_pred_test > threshold_test
+
+            df_test = pd.DataFrame(list(zip(y_test, y_pred_test_abs, arr_X_test[:, 0], arr_X_test[:, 1], arr_X_train[:, 2])), columns=["true", "pred", "age", "gender", "view_pos"])
+            df_test["train"] = 0
+            df_test["model"] = f"{transfer_learning_type}_{model_type}" if version is None else f"{transfer_learning_type}_v{version}_{model_type}"
+
+            df_group = pd.concat([df_train, df_test])
+            list_df_groups.append(df_group)
+
+            f1_test = le_me.f1_score(y_test, y_pred_test_abs)
+            auc_test = le_me.auc(fpr_test, tpr_test)
+
+            list_dict_rows.append({
+                "uid": uid,
+                "transfer_learning_type": transfer_learning_type if version is None else f"{transfer_learning_type}_v{version}",
+                "model_type": model_type,
+                "train": {
+                    "threshold": threshold_train,
+                    "f1": f1_train,
+                    "auc": auc_train
+                },
+                "test": {
+                    "threshold": threshold_test,
+                    "f1": f1_test,
+                    "auc": auc_test
+                }
+            })
+
+        df_summary = pd.json_normalize(list_dict_rows)
+        df_summary["unique_type"] = df_summary["transfer_learning_type"].astype(str) + " | " + df_summary["model_type"].astype(str)
+        # ax = df_summary.plot.bar(x="unique_type", y=["train.auc", "test.auc"])
+        # ax.legend(["train", "test"])
+
+        df_group = pd.concat(list_df_groups)
+
+        # return df_summary, df_group, ax
+        return df_summary, df_group
+        
 
     def contrast_stretch(self, img, lower_limit=0, upper_limit=1, lowest_pixel=None, highest_pixel=None, flatten=False):
         """Performs contrast stretching
@@ -99,6 +295,24 @@ class Task1:
             return img_new.flatten()
 
         return skut.img_as_float(img_new)
+
+    def per_group_performance(self, df):
+        for model_name in df["model"].unique():
+            print("\n")
+            print(f"=================={model_name}==================")
+            df_temp = df[df["model"] == model_name]
+            df_temp = df_temp.join(pd.get_dummies(df_temp["cf"]))
+            for category in ["view_pos", "age_binned", "gender"]:
+                for train_status in [0, 1]:
+                    df_temp_train = df_temp[df_temp["train"] == train_status]
+                    df_temp_train = df_temp_train.groupby([category, "train"])[pd.get_dummies(df_temp["cf"]).columns.tolist()].sum().reset_index()
+                    df_temp_train["precision"] = df_temp_train["TP"]/(df_temp_train["TP"] + df_temp_train["FP"])
+                    df_temp_train["recall"] = df_temp_train["TP"]/(df_temp_train["TP"] + df_temp_train["FN"])
+                    df_temp_train["f1"] = (2 * df_temp_train["precision"] * df_temp_train["recall"]) / (df_temp_train["precision"] + df_temp_train["recall"])
+                    # df_temp["model"] = model_name
+                    print(tabulate(df_temp_train, headers = "keys", tablefmt = "psql"))
+                    print("\n")
+            print("\n\n")
 
     def get_regions(self, filepath_img, n_rows=2, n_cols=2):
         """Segregates image into boxes or regions
@@ -235,3 +449,28 @@ class Task1:
         plt.title(title, fontsize=18)
         plt.savefig(filepath_save)
         return fig
+
+    def calculate_threshold(self, fpr, tpr, thresholds):
+        """Calculates best threshold value for classification probabilities.
+
+        Args:
+            fpr (np.ndarray): FPR
+            tpr (np.ndarray): TPR
+            thresholds (np.ndarray): thresholds
+        """
+        list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
+        threshold = list_diff[0][2]
+        return threshold
+
+    def divide_chunks(self, l, chunk_size):
+        """Divides a list or array or iterator into chunks
+
+        Args:
+            l (iter): iterator
+            chunk_size (int): size of every chunk, except the last
+
+        Yields:
+            generator: chunk
+        """
+        for i in range(0, len(l), chunk_size):
+            yield l[i: i + chunk_size]

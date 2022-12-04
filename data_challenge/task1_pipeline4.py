@@ -1,8 +1,8 @@
 """
-Pipeline 3:
+Pipeline 4:
 1. Crop region of interest
 2. Perform contrast stretching
-3. Convert image to VGG16 format
+3. Convert image to Inception V3 format
 4. Save image
 5. Create feature matrix
 6. Run Logistic Regression
@@ -17,6 +17,7 @@ import numpy as np
 
 from tqdm import tqdm
 
+from sklearn.svm import SVC
 import skimage.io as skio
 import skimage.transform as sktr
 import skimage.color as skcol
@@ -26,7 +27,7 @@ import sklearn.linear_model as le_lm
 import sklearn.metrics as le_me
 import pickle
 
-import tensorflow.keras.applications.vgg16 as vgg16
+import tensorflow.keras.applications.inception_v3 as ki3
 
 import yaml, os
 
@@ -46,8 +47,9 @@ logging.info("Started the script")
 with open("func/params.yaml", "r") as f:
     dict_params = yaml.full_load(f)["task1"]
 
-vgg16_model = vgg16.VGG16(include_top=False, pooling="avg")
-logging.info(vgg16_model)
+iv3 = ki3.InceptionV3(include_top=False, pooling="avg")
+
+logging.info(iv3)
 
 df_info = pd.read_csv("dataset/dataInfo.csv", index_col=False)
 df_info["filepath"] = df_info["FullFileName"].apply(lambda path: os.path.join("dataset", path))
@@ -79,42 +81,41 @@ for filepath_img, train, cardiomegaly in tqdm(df_info[["filepath", "Train", "Car
             continue
         img = code_obj.crop_img_by_region(filepath_img=filepath_img, **(dict_params["crop"]))
         img = code_obj.contrast_stretch(img=img)
-        img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["VGG16"]))
+        img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["InceptionV3"]))
         img *= 255
         img = img.astype(np.uint8)
-        skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
+        # skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
         if train == 1:
             list_img_train.append(img)
             list_y_train.append(cardiomegaly)
         else:
             list_img_test.append(img)
             list_y_test.append(cardiomegaly)
-        # logging.info(f"Pre-processing: {i}/{n_values} {filepath_img}")
+            # logging.info(f"Pre-processing: {i}/{n_values} {filepath_img}")
     except Exception as e:
         logging.error(e, exc_info=True)
     i += 1
 
 logging.info("Completed pre-processing of images.")
 
-trainX = vgg16_model.predict(vgg16.preprocess_input(np.array(list_img_train)))
+trainX = iv3.predict(ki3.preprocess_input(np.array(list_img_train)))
 trainY =np.array(list_y_train)
 logging.info("Generated final form of training dataset for machine learning.")
-testX = vgg16_model.predict(vgg16.preprocess_input(np.array(list_img_test)))
+testX = iv3.predict(ki3.preprocess_input(np.array(list_img_test)))
 testY = np.array(list_y_test)
 
 logging.info("Generated final form of dataset for machine learning.")
 
-mod1 = le_lm.LogisticRegression(**(dict_params["classification"]["LogisticRegression"]))
+mod1 = SVC(**(dict_params["classification"]["SVM"]))
 mod1.fit(trainX, trainY)
 
 logging.info("Trained model.")
 
 predY = mod1.predict_proba(testX)[:, 1]
 
-fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression | VGG16", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
 
-logging.info("Plotted ROC curve.")
-
+fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "SVM | InceptionV3", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
+logging.info("Plotted ROC curve")
 # list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
 # threshold = list_diff[0][2]
 threshold = code_obj.calculate_threshold(fpr, tpr, thresholds)
@@ -125,9 +126,7 @@ logging.info(f"Calculated threshold: {threshold}")
 conf_matrix = le_me.confusion_matrix(testY, yPredAbsolute)
 
 code_obj.plot_confusion_matrix(conf_matrix, f"Confusion matrix: Threshold: {round(threshold, 2)}", os.path.join(folderpath_save, f"{utc_timestamp}_confusion_matrix.png"))
-
 logging.info("Plotted confusion matrix.")
-
 with open(os.path.join(folderpath_save, f"{utc_timestamp}.pkl"), "wb") as f:
     pickle.dump(mod1, f)
 
@@ -142,12 +141,12 @@ logging.info("Saved numpy arrays.")
 dict_summary = {
     "model":
     {
-        "type": "LogisticRegression",
-        "penalty": "l1",
+        "type": "SVM",
         "C": 0.5,
-        "solver": "liblinear"
+        "kernel": "rbf",
+        "probability": True
     },
-    "transfer_learning": "VGG16"
+    "transfer_learning": "InceptionV3"
 }
 with open(os.path.join(folderpath_save, f"{utc_timestamp}.yaml"), "w") as f:
     yaml.dump(dict_summary, f)

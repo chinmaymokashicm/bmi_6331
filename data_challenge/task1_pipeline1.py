@@ -83,7 +83,7 @@ for filepath_img, train, cardiomegaly in tqdm(df_info[["filepath", "Train", "Car
         img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["InceptionV3"]))
         img *= 255
         img = img.astype(np.uint8)
-        skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
+        # skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
         if train == 1:
             list_img_train.append(img)
             list_y_train.append(cardiomegaly)
@@ -105,7 +105,7 @@ testY = np.array(list_y_test)
 
 logging.info("Generated final form of dataset for machine learning.")
 
-mod1 = le_lm.LogisticRegression(penalty="l1", C=0.5, solver="liblinear")
+mod1 = le_lm.LogisticRegression(**(dict_params["classification"]["LogisticRegression"]))
 mod1.fit(trainX, trainY)
 
 logging.info("Trained model.")
@@ -115,8 +115,9 @@ predY = mod1.predict_proba(testX)[:, 1]
 
 fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression | InceptionV3", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
 logging.info("Plotted ROC curve")
-list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
-threshold = list_diff[0][2]
+# list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
+# threshold = list_diff[0][2]
+threshold = code_obj.calculate_threshold(fpr, tpr, thresholds)
 yPredAbsolute = predY > threshold
 
 logging.info(f"Calculated threshold: {threshold}")

@@ -1,8 +1,8 @@
 """
-Pipeline 3:
-1. Crop region of interest
+Pipeline 10:
+1. Crop region of interest (new)
 2. Perform contrast stretching
-3. Convert image to VGG16 format
+3. Convert image to ResNet50 format
 4. Save image
 5. Create feature matrix
 6. Run Logistic Regression
@@ -26,7 +26,7 @@ import sklearn.linear_model as le_lm
 import sklearn.metrics as le_me
 import pickle
 
-import tensorflow.keras.applications.vgg16 as vgg16
+import tensorflow.keras.applications.resnet50 as k50
 
 import yaml, os
 
@@ -46,8 +46,8 @@ logging.info("Started the script")
 with open("func/params.yaml", "r") as f:
     dict_params = yaml.full_load(f)["task1"]
 
-vgg16_model = vgg16.VGG16(include_top=False, pooling="avg")
-logging.info(vgg16_model)
+r50 = k50.ResNet50(include_top=False, pooling="avg")
+logging.info(r50)
 
 df_info = pd.read_csv("dataset/dataInfo.csv", index_col=False)
 df_info["filepath"] = df_info["FullFileName"].apply(lambda path: os.path.join("dataset", path))
@@ -77,9 +77,9 @@ for filepath_img, train, cardiomegaly in tqdm(df_info[["filepath", "Train", "Car
         folderpath = folderpath_preprocess_train if train == 1 else folderpath_preprocess_test
         if not os.path.exists(filepath_img):
             continue
-        img = code_obj.crop_img_by_region(filepath_img=filepath_img, **(dict_params["crop"]))
+        img = code_obj.crop_img_by_region(filepath_img=filepath_img, **(dict_params["crop_new"]))
         img = code_obj.contrast_stretch(img=img)
-        img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["VGG16"]))
+        img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["ResNet50"]))
         img *= 255
         img = img.astype(np.uint8)
         skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
@@ -96,10 +96,10 @@ for filepath_img, train, cardiomegaly in tqdm(df_info[["filepath", "Train", "Car
 
 logging.info("Completed pre-processing of images.")
 
-trainX = vgg16_model.predict(vgg16.preprocess_input(np.array(list_img_train)))
+trainX = r50.predict(k50.preprocess_input(np.array(list_img_train)))
 trainY =np.array(list_y_train)
 logging.info("Generated final form of training dataset for machine learning.")
-testX = vgg16_model.predict(vgg16.preprocess_input(np.array(list_img_test)))
+testX = r50.predict(k50.preprocess_input(np.array(list_img_test)))
 testY = np.array(list_y_test)
 
 logging.info("Generated final form of dataset for machine learning.")
@@ -111,7 +111,7 @@ logging.info("Trained model.")
 
 predY = mod1.predict_proba(testX)[:, 1]
 
-fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression | VGG16", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
+fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression | ResNet50", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
 
 logging.info("Plotted ROC curve.")
 
@@ -145,9 +145,10 @@ dict_summary = {
         "type": "LogisticRegression",
         "penalty": "l1",
         "C": 0.5,
+        "version": 2,
         "solver": "liblinear"
     },
-    "transfer_learning": "VGG16"
+    "transfer_learning": "ResNet50"
 }
 with open(os.path.join(folderpath_save, f"{utc_timestamp}.yaml"), "w") as f:
     yaml.dump(dict_summary, f)

@@ -104,7 +104,7 @@ testY = np.array(list_y_test)
 
 logging.info("Generated final form of dataset for machine learning.")
 
-mod1 = le_lm.LogisticRegression(penalty="l1", C=0.5, solver="liblinear")
+mod1 = le_lm.LogisticRegression(**(dict_params["classification"]["LogisticRegression"]))
 mod1.fit(trainX, trainY)
 
 logging.info("Trained model.")
@@ -115,8 +115,9 @@ fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression
 
 logging.info("Plotted ROC curve.")
 
-list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
-threshold = list_diff[0][2]
+# list_diff = sorted([[tp, fp, threshold, tp - fp] for fp, tp, threshold in zip(fpr, tpr, thresholds)], reverse=True, key=lambda item: item[-1])
+# threshold = list_diff[0][2]
+threshold = code_obj.calculate_threshold(fpr, tpr, thresholds)
 yPredAbsolute = predY > threshold
 
 logging.info(f"Calculated threshold: {threshold}")

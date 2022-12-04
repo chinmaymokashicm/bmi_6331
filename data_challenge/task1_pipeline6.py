@@ -1,5 +1,5 @@
 """
-Pipeline 3:
+Pipeline 6:
 1. Crop region of interest
 2. Perform contrast stretching
 3. Convert image to VGG16 format
@@ -17,6 +17,7 @@ import numpy as np
 
 from tqdm import tqdm
 
+from sklearn.svm import SVC
 import skimage.io as skio
 import skimage.transform as sktr
 import skimage.color as skcol
@@ -82,7 +83,7 @@ for filepath_img, train, cardiomegaly in tqdm(df_info[["filepath", "Train", "Car
         img = code_obj.transform_img_to_size(img=img, **(dict_params["transfer_learning"]["VGG16"]))
         img *= 255
         img = img.astype(np.uint8)
-        skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
+        # skio.imsave(fname=os.path.join(folderpath, os.path.basename(filepath_img)), arr=img)
         if train == 1:
             list_img_train.append(img)
             list_y_train.append(cardiomegaly)
@@ -104,14 +105,14 @@ testY = np.array(list_y_test)
 
 logging.info("Generated final form of dataset for machine learning.")
 
-mod1 = le_lm.LogisticRegression(**(dict_params["classification"]["LogisticRegression"]))
+mod1 = SVC(**(dict_params["classification"]["SVM"]))
 mod1.fit(trainX, trainY)
 
 logging.info("Trained model.")
 
 predY = mod1.predict_proba(testX)[:, 1]
 
-fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "Logistic Regression | VGG16", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
+fig, fpr, tpr, thresholds = code_obj.plot_roc(testY, predY, "SVM | VGG16", os.path.join(folderpath_save, f"{utc_timestamp}_roc.png"))
 
 logging.info("Plotted ROC curve.")
 
@@ -142,10 +143,10 @@ logging.info("Saved numpy arrays.")
 dict_summary = {
     "model":
     {
-        "type": "LogisticRegression",
-        "penalty": "l1",
+        "type": "SVM",
         "C": 0.5,
-        "solver": "liblinear"
+        "kernel": "rbf",
+        "probability": True
     },
     "transfer_learning": "VGG16"
 }
